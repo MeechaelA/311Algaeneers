@@ -15,17 +15,17 @@ OneWire oneWire(ONE_WIRE_BUS); // MIGHT NOT NEED THIS
 DallasTemperature sensors(&oneWire);
 
 // Store readings
-float tempC = 0; // thermocouple temperature reading
+int tempC = 0; // thermocouple temperature reading
 int CO2mv = 0; // raw CO2 sensor reading
 int CO2mvScaled = 0; // interim calculation of [ppm] calculation
-float CO2concen = 0; // final converted CO2 reading, in [ppm]
+int CO2concen = 0; // final converted CO2 reading, in [ppm]
 
 // Store values to print
-timeString = String(0);
-CO2String = String(0);
-tempString = String(0);
-relayStatusString = String(0);
-finalString = timeString + CO2String + tempString + relayStatusString;
+char timeString[] = "0";
+char CO2String[] = "0";
+char tempString[] = "0";
+char relayStatusString[] = "0";
+char finalString[] = {timeString, ",", CO2String, ",", tempString, ",", relayStatusString};
 
 // Pins
 int tempPin = 3; // Digital pin thermocouple is controlled via (this is not actually used and is handled by the OneWire library)
@@ -38,7 +38,7 @@ unsigned long prevLog = 0; // Stores last time the data was logged
 unsigned long overrideTime = 0; // Stores time the relay override was begun (allow things to cool down if heatpad is on too long)
 
 // House keepings
-int relayStatus = 0; // 0 = heat pad on, 1 = heat pad off
+int relayState = 0; // 0 = heat pad on, 1 = heat pad off
 int logNOW = 0;
 int relayOVERRIDE = 0;
 
@@ -49,26 +49,26 @@ long heatPadTimeout = 7200000; // Controls the timeout of the heating pad. 7.2M 
 long heatPadCooldown = 900000; // cooldown time of heatpad if things are on too long (15 [min])
 
 // Control temperature range
-int heatRangeLow = 20; // Lower bound of temperature range we want to keep water at
-int heatRangeHigh = 25; // Upper bound of temperature range we want to keep water at
+int heatRangeLOW = 20; // Lower bound of temperature range we want to keep water at
+int heatRangeHIGH = 25; // Upper bound of temperature range we want to keep water at
 
 void setup() {
 	pinMode(relayPin, HIGH); // Setup relay control pin as output
 	sensors.begin(); // Start up temp sensor library
 	analogReference(INTERNAL); // 1.1V reference for CO2 sensor
 	Serial.begin(9600); // initialize serial logging
-	tempC = sensors.requestTemperatures(); // get initial temperature reading	
+	sensors.requestTemperatures(); // get initial temperature reading	
 }
 
 void loop() {
 
 	// Check temperature so that the heatpad can be turned on/off in order to maintain 5C range in water
-	if ((millis() - prevTemp) >= tempInterval && relayOVERRIDE = 0) {
+	if ((millis() - prevTemp) >= tempInterval && relayOVERRIDE == 0) {
 		tempC = sensors.getTempCByIndex(0); // get current temperature [degC]
 
-		if (tempC >= heatRangeHigh) { // If water temperature is too high
+		if (tempC >= heatRangeHIGH) { // If water temperature is too high
 			digitalWrite(relayPin, LOW); // Turn relay (heat pad) off
-			relayStatus = 0; // Update current status of relay for data logging purposes
+			relayState = 0; // Update current status of relay for data logging purposes
 			logNOW = 1; // Force a data log
 		}
 		if (tempC <= heatRangeLOW) { // If water temperature is too low
@@ -87,34 +87,34 @@ void loop() {
 
 		// Check if CO2 reading was successful
 		if(CO2mvScaled == 0) {
-			CO2String = String("ERR"); // Convert to a string for data logging
+			char CO2String[] = "ERR"; // Convert to a string for data logging
 		}
 		else if(CO2mvScaled < 400) {
-			CO2String = String("PH"); // PH -> Preheating (These values usually only occur when the sensor hasn't been running for long)
+			char CO2String[] = "PH"; // PH -> Preheating (These values usually only occur when the sensor hasn't been running for long)
 		}
 		else {
 			CO2concen = ((CO2mvScaled - 400))*(50.0/16.0); // voltageLevel - 400 [mV] offset then a final calibration scaling for [mV] -> [ppm] 
-			CO2String = String(CO2concen); // Convert [ppm] value to a string for data logging
+			char CO2String = itoa(CO2concen, CO2String, 10); // Convert [ppm] value to a string for data logging
 		}
 
 		// Check if temperature reading was successful
 		if(tempC != DEVICE_DISCONNECTED_C) {
-			tempString = String(tempC); // convert [degC] value to a string for data logging
+			char tempString = itoa(tempC, tempString, 10); // convert [degC] value to a string for data logging
 		}
 		else {
-			tempString = String("ERR"); // Thermocouple was not properly connected so reading wasn't obtained
+			char tempString[] = "ERR"; // Thermocouple was not properly connected so reading wasn't obtained
 		}
 
 		// Convert 0 and 1 to ON/OFF for heat pad
-		if (relayStatus = 1) {
-			relayStatusString = String("ON");
+		if (relayState = 1) {
+			char relayStatusString[] = "ON";
 		}
 		else {
-			relayStatusString = String("OFF");		
+			char relayStatusString[] = "OFF";		
 		}
 
 		// Compile data into CSV format for data logging
-		finalString = timeString + "," + CO2String + "," + tempString + "," + relayStatusString;
+		char finalString[] = {timeString, ",", CO2String, ",", tempString, ",", relayStatusString};
 		Serial.println(finalString); // Print results
 
 		prevLog = millis();
@@ -122,9 +122,9 @@ void loop() {
 	}
 
 	// Turn off heat pad if its been on too long
-	if (relayStatus == 1 && (millis() - prevTemp) > heatPadTimeout) {
+	if (relayState == 1 && (millis() - prevTemp) > heatPadTimeout) {
 		digitalWrite(relayPin, LOW);
-		relayStatus = 0
+		relayState = 0;
 		relayOVERRIDE = 1;
 		overrideTime = millis();
 	}
